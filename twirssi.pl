@@ -7,13 +7,15 @@ use File::Temp;
 use LWP::Simple;
 use Data::Dumper;
 use Encode;
+use JSON;
+require LWP::UserAgent;
 use POSIX qw/:sys_wait_h/;
 use Net::Twitter qw/3.05/;
 $Data::Dumper::Indent = 1;
 
 use vars qw($VERSION %IRSSI);
 
-$VERSION = "2.4.2beta";
+$VERSION = "2.4.2beta-benh";
 %IRSSI   = (
     authors     => 'Dan Boger',
     contact     => 'zigdon@gmail.com',
@@ -1418,7 +1420,7 @@ sub monitor_child {
                 push @lines,
                   [
                     ( MSGLEVEL_PUBLIC | $hilight ),
-                    $meta{type}, $account, $meta{nick}, $marker, $_
+                    $meta{type}, $account, $meta{nick}, $marker, &magic_up_links( $_ )
                   ];
             } elsif ( $meta{type} eq 'search' ) {
                 push @lines,
@@ -1833,6 +1835,59 @@ sub get_text {
 
     return $text;
 }
+
+sub magic_up_links {
+
+    my $text = shift;
+
+    ## With thanks to @bobtfish for the perl help!
+
+	# See if we can un shorten links!
+	if ($text =~ m,http://[a-z0-9A-Z\./]+, ) {
+		my $url = $1;
+
+        # written at 2am...
+
+        my $wtext = $text;      # working text line, as we may remove bits.
+        my @shorts;             # short URLs for the query string
+        my @urls;               # actual short URLs
+
+        # add in more URL services as we go...
+        while ( $wtext =~ m,(http://(tinyurl\.com|bit\.ly|url\.ie|is\.gd)/\w+)\b, )
+        {
+            push @shorts, "q=$1";
+            push @urls, $1;
+
+            $wtext =~ s/$1//g;  # remove it from the working text line,
+                                # we'll put it back in later.
+        }
+
+        # construct the request URL. Their API states that only 20 can be
+        # requested in one go... 140 / 20 = 7 chars per URL. "http://" is
+        # 7 chars, so, in theory, we should never be over that limit!
+        my $urlbits = join( "&" , @shorts );
+        my $urltomakelonger = "http://www.longurlplease.com/api/v1.1?$urlbits";
+
+        # Do the request to them! With a timeout
+        my $ua = LWP::UserAgent->new;
+        $ua->timeout(4);
+
+        my $response = $ua->get( $urltomakelonger );
+
+        my $json_urls = eval { decode_json( $response->decoded_content ) };
+        &notice("Invalid JSON returned. Error was: $@ Content was " .  $response->decoded_content) if $@;
+
+        # now go through them all and butcher the original $text with the
+        # new URLs
+        foreach my $u (@urls)
+        {
+            $text = s/$u/$json_urls->{$u}/g;        # may as well do /g
+                                                    # incase a URL is repeated.
+        }
+    }
+    return $text;
+}
+
 
 Irssi::signal_add( "send text", "event_send_text" );
 
