@@ -1840,9 +1840,15 @@ sub magic_up_links {
 
     my $text = shift;
 
+    # if it's set to not lengthen, don't bother! (too many double negatives
+    # there.
+    return $text unless( Irssi::settings_get_bool( "twirssi_always_lengthen" ) );
+
+    ## we're here, we obviously want to lengthen the URLs we can...
+    ##
     ## With thanks to @bobtfish for the perl help!
 
-	# See if we can un shorten links!
+	# See if there are URLs that we can un shorten links!
 	if ($text =~ m,http://[a-z0-9A-Z\./]+, ) {
 		my $url = $1;
 
@@ -1852,8 +1858,12 @@ sub magic_up_links {
         my @shorts;             # short URLs for the query string
         my @urls;               # actual short URLs
 
+        # user definable regexp, so I don't have to keep reloading the
+        # script!
+        my $shorty_regexp = Irssi::settings_get_str("twirssi_shorten_regexp");
+
         # add in more URL services as we go...
-        while ( $wtext =~ m,(http://(tinyurl\.com|bit\.ly|url\.ie|is\.gd)/\w+)\b, )
+        while ( $wtext =~ m,(http://(${shorty_regexp})/\w+)\b, )
         {
             push @shorts, "q=$1";
             push @urls, $1;
@@ -1870,19 +1880,30 @@ sub magic_up_links {
 
         # Do the request to them! With a timeout
         my $ua = LWP::UserAgent->new;
-        $ua->timeout(4);
+        $ua->timeout( Irssi::settings_get_int("twirssi_longurl_timeout") );     # user definable!
 
         my $response = $ua->get( $urltomakelonger );
 
         my $json_urls = eval { decode_json( $response->decoded_content ) };
-        &notice("Invalid JSON returned. Error was: $@ Content was " .  $response->decoded_content) if $@;
 
-        # now go through them all and butcher the original $text with the
-        # new URLs
-        foreach my $u (@urls)
+        # $@ contains some error, I don't understand this bit, I'm just
+        # using t0m's code. This should mean the URLs still get through,
+        # even if longurlplease break, just shortened still.
+        if ( $@ )
         {
-            $text = s/$u/$json_urls->{$u}/g;        # may as well do /g
-                                                    # incase a URL is repeated.
+            &notice("Invalid JSON returned. Error was big, I won't include it here." );
+            # &ccrap( "$@ Content was " .  $response->decoded_content) if &debug;
+        }
+        else
+        {
+
+            # now go through them all and butcher the original $text with the
+            # new URLs
+            foreach my $u (@urls)
+            {
+                $text = s/$u/$json_urls->{$u}/g;        # may as well do /g
+                                                        # incase a URL is repeated.
+            }
         }
     }
     return $text;
@@ -1913,6 +1934,7 @@ Irssi::settings_add_str( "twirssi", "twirssi_default_service", "Twitter" );
 Irssi::settings_add_str( "twirssi", "twirssi_nick_color",      "%B" );
 Irssi::settings_add_str( "twirssi", "twirssi_topic_color",     "%r" );
 Irssi::settings_add_str( "twirssi", "twirssi_ignored_tags",    "" );
+Irssi::settings_add_str( "twirssi", "twirssi_shorten_regexp",     "tinyurl\.com|bit\.ly|url\.ie|is\.gd|post\.ly" );
 Irssi::settings_add_str( "twirssi", "twirssi_stripped_tags",   "" );
 Irssi::settings_add_str( "twirssi", "twirssi_retweet_format",
     'RT $n: "$t" ${-- $c$}' );
@@ -1925,6 +1947,7 @@ Irssi::settings_add_str( "twirssi", "twirssi_oauth_store",
 
 Irssi::settings_add_int( "twirssi", "twitter_friends_poll", 600 );
 Irssi::settings_add_int( "twirssi", "twitter_timeout",      30 );
+Irssi::settings_add_int( "twirssi", "twirssi_longurl_timeout",  4 );
 
 Irssi::settings_add_bool( "twirssi", "twirssi_upgrade_beta",      0 );
 Irssi::settings_add_bool( "twirssi", "tweet_to_away",             0 );
@@ -1937,6 +1960,7 @@ Irssi::settings_add_bool( "twirssi", "twirssi_use_reply_aliases", 0 );
 Irssi::settings_add_bool( "twirssi", "twirssi_notify_timeouts",   1 );
 Irssi::settings_add_bool( "twirssi", "twirssi_hilights",          1 );
 Irssi::settings_add_bool( "twirssi", "twirssi_always_shorten",    0 );
+Irssi::settings_add_bool( "twirssi", "twirssi_always_lengthen",   0 );
 Irssi::settings_add_bool( "twirssi", "tweet_window_input",        0 );
 Irssi::settings_add_bool( "twirssi", "twirssi_avoid_ssl",         0 );
 Irssi::settings_add_bool( "twirssi", "twirssi_use_oauth",         1 );
