@@ -1848,7 +1848,7 @@ sub magic_up_links {
     ##
     ## With thanks to @bobtfish for the perl help!
 
-	# See if there are URLs that we can un shorten links!
+	# See if there are URLs at all in the text...
 	if ($text =~ m,http://[a-z0-9A-Z\./]+, ) {
 
         # written at 2am...
@@ -1861,7 +1861,7 @@ sub magic_up_links {
         # script!
         my $shorty_regexp = Irssi::settings_get_str("twirssi_shorten_regexp");
 
-        my $regexp = qr%(http://(${shorty_regexp})/\w+)\b%;
+        my $regexp = qr%(http://(${shorty_regexp})/[\w_-]+)\b%;
 
         # add in more URL services as we go...
         while ( $wtext =~ $regexp )
@@ -1883,14 +1883,22 @@ sub magic_up_links {
         # construct the request URL. Their API states that only 20 can be
         # requested in one go... 140 / 20 = 7 chars per URL. "http://" is
         # 7 chars, so, in theory, we should never be over that limit!
-        # my $urlbits = join( '&' , @shorts );
         my $urltomakelonger = 'http://www.longurlplease.com/api/v1.1?' . join( '&' , @shorts );
 
         # Do the request to them! With a timeout
         my $ua = LWP::UserAgent->new;
         $ua->timeout( Irssi::settings_get_int("twirssi_longurl_timeout") );     # user definable!
 
+        &notice( "banging out $urltomakelonger now" ) if &debug;
+
         my $response = $ua->get( $urltomakelonger );
+
+        # did that request work?
+        unless ($response->is_success)
+        {
+            &notice( "Request to make URLs longer failed with " .  $response->code ) if &debug;
+            return $text;
+        }
 
         my $json_urls = eval { decode_json( $response->decoded_content ) };
 
@@ -1900,7 +1908,7 @@ sub magic_up_links {
         if ( $@ )
         {
             &notice("Invalid JSON returned. Error was big, I won't include it here." );
-            # &ccrap( "$@ Content was " .  $response->decoded_content) if &debug;
+            &ccrap( "$@ Content was " .  $response->decoded_content) if &debug;
         }
         else
         {
