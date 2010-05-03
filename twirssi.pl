@@ -1850,33 +1850,41 @@ sub magic_up_links {
 
 	# See if there are URLs that we can un shorten links!
 	if ($text =~ m,http://[a-z0-9A-Z\./]+, ) {
-		my $url = $1;
 
         # written at 2am...
 
-        my $wtext = $text;      # working text line, as we may remove bits.
-        my @shorts;             # short URLs for the query string
-        my @urls;               # actual short URLs
+        my $wtext   = $text;      # working text line, as we may remove bits.
+        my @shorts  = ();         # short URLs for the query string
+        my @urls    = ();         # actual short URLs
 
         # user definable regexp, so I don't have to keep reloading the
         # script!
         my $shorty_regexp = Irssi::settings_get_str("twirssi_shorten_regexp");
 
-        # add in more URL services as we go...
-        while ( $wtext =~ m,(http://(${shorty_regexp})/\w+)\b, )
-        {
-            push @shorts, "q=$1";
-            push @urls, $1;
+        my $regexp = qr%(http://(${shorty_regexp})/\w+)\b%;
 
-            $wtext =~ s/$1//g;  # remove it from the working text line,
-                                # we'll put it back in later.
+        # add in more URL services as we go...
+        while ( $wtext =~ $regexp )
+        {
+            my $url = $1;
+            push( @shorts, "q=$url" );
+            push( @urls, $url );
+
+            $wtext =~ s/${url}//g;  # remove it from the working text line,
+                                    # we'll put it back in later.
         }
+
+        # if by this stage we've got zero URLs, then return... Ugly. 
+        if ( @urls == 0 )
+        {
+            return $text;
+        } 
 
         # construct the request URL. Their API states that only 20 can be
         # requested in one go... 140 / 20 = 7 chars per URL. "http://" is
         # 7 chars, so, in theory, we should never be over that limit!
-        my $urlbits = join( "&" , @shorts );
-        my $urltomakelonger = "http://www.longurlplease.com/api/v1.1?$urlbits";
+        # my $urlbits = join( '&' , @shorts );
+        my $urltomakelonger = 'http://www.longurlplease.com/api/v1.1?' . join( '&' , @shorts );
 
         # Do the request to them! With a timeout
         my $ua = LWP::UserAgent->new;
