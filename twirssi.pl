@@ -1896,8 +1896,21 @@ sub magic_up_links {
         # did that request work?
         unless ($response->is_success)
         {
-            &notice( "Request to make URLs longer failed with " .  $response->code ) if &debug;
-            return $text;
+            # Try again, as it's flakey if it 500s anyway...
+            if ( $response->code == 500 )
+            {
+                $response = $ua->get( $urltomakelonger );
+                unless ( $response->is_success )
+                {
+                    &notice( "It keeps 500ing, bah." ) if &debug;
+                    return $text;
+                }
+            }
+            else
+            {
+                &notice( "Request to make URLs longer failed with " .  $response->code ) if &debug;
+                return $text;
+            }
         }
 
         my $json_urls = eval { decode_json( $response->decoded_content ) };
