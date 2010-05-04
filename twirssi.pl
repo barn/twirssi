@@ -1930,8 +1930,8 @@ sub magic_up_links {
             # new URLs
             foreach my $u (@urls)
             {
-                $text = s/$u/$json_urls->{$u}/g;        # may as well do /g
-                                                        # incase a URL is repeated.
+                $text =~ s/$u/$json_urls->{$u}/g;        # may as well do /g
+                                                         # incase a URL is repeated.
             }
         }
     }
